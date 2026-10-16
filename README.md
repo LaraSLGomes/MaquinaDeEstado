@@ -1,48 +1,76 @@
-# Laboratório de FSM: TCP e UDP
+# Simulador de FSM: TCP e UDP
 
-Simulador didático de máquinas de estado de transporte. O núcleo funciona em Node.js sem React; a interface React apresenta estados, eventos, segmentos e métricas da simulação.
+Aplicação web interativa para explorar máquinas de estados finitos (FSM) e alguns mecanismos dos protocolos TCP e UDP. O simulador representa dois hosts, A e B, que trocam segmentos e datagramas por um canal de rede configurável.
 
-## Executar
+O canal pode introduzir perda, corrupção, duplicação, reordenação e atraso. Uma seed controla a sequência pseudoaleatória para facilitar a reprodução de uma simulação.
 
-Requisitos: Node.js 20 ou superior.
+O projeto é uma ferramenta didática inspirada nos tópicos de protocolos de transporte de *Redes de Computadores e a Internet*, de Kurose e Ross. Não implementa as pilhas TCP/IP do sistema operacional nem pretende cobrir todas as regras das especificações dos protocolos.
 
-```sh
+## Começar
+
+### Pré-requisitos
+
+- Node.js `^20.19.0` ou `>=22.12.0` (requisito do Vite 8).
+- npm.
+
+Na raiz do projeto, instale as dependências e inicie o servidor de desenvolvimento:
+
+```bash
 npm install
 npm run dev
-npm test
-npm run build
-npm run lint
 ```
 
-## Arquitetura
+Abra no navegador o endereço mostrado pelo Vite, normalmente `http://localhost:5173`.
 
-- `src/engine/FSMEngine.js`: motor de transições dirigido por definições, independente da GUI.
-- `src/engine/fsmDefinitions.js`: estados TCP, transições e FSM UDP de estado único, além do checksum UDP IPv4.
-- `src/engine/VirtualClock.js`: fila de eventos e timers sem depender do relógio de parede.
-- `src/engine/Channel.js`: perda, corrupção, atraso variável, duplicação, reordenação, descarte manual e PRNG com seed.
-- `src/engine/NetworkSimulator.js`: hosts A/B, handshake, encerramento, retransmissão, RTT/RTO, ACK cumulativo, fast retransmit, UDP e métricas.
-- `src/engine/testScenarios.js`: cenários executáveis sem importar React.
-- `src/App.jsx`: interface e visualizações; não implementa regras de transporte.
+### Fluxo rápido
 
-O canal e o relógio usam o mesmo gerador pseudoaleatório com seed para reproduzir uma execução. O relógio pode avançar um evento por vez ou até esvaziar a fila. Os timers TCP são virtuais, incluindo retransmissão e TIME_WAIT.
+1. Escolha TCP ou UDP no seletor de protocolo.
+2. Ajuste as probabilidades de falha, o intervalo de atraso e a seed no painel do canal.
+3. Para TCP, inicie o handshake antes de enviar segmentos. Para UDP, envie um datagrama diretamente.
+4. Use **Passo** para avançar um evento do relógio virtual ou **Iniciar** para processar a fila continuamente; **Pausar** interrompe a execução.
+5. Observe os estados dos hosts, o diagrama de sequência, as métricas e o log de transições. Use **Reset** para começar de novo com a configuração atual.
+6. Use **Comparar UDP × TCP** para executar a mesma carga nos dois protocolos com os parâmetros atuais do canal.
 
-## Testes automatizados
+No campo **Dados de teste**, cada linha representa um segmento TCP. No modo UDP, as linhas são combinadas em um único datagrama.
 
-`npm test` executa os dez cenários do trabalho e termina com código diferente de zero quando qualquer asserção falha. O relatório mostra o status por cenário e a comparação de entrega UDP/TCP.
+## O que é simulado
 
-1. Handshake TCP sem falhas.
-2. Perda do SYN e retransmissão.
-3. Perda do SYN-ACK e recuperação com SYN/SYN-ACK retransmitidos.
-4. Encerramento normal de quatro vias.
-5. Fechamento simultâneo via CLOSING.
-6. Fast retransmit após três ACKs duplicados.
-7. RST ao atingir porta TCP fechada.
-8. Perda UDP sem retransmissão.
-9. Descarte UDP silencioso por checksum inválido.
-10. Comparação UDP × TCP sob os mesmos parâmetros de canal.
+- **FSM TCP orientada por dados:** estados e transições de conexão são descritos em `src/engine/fsmDefinitions.js`. A simulação inclui abertura, handshake de três vias, encerramento normal e simultâneo, `TIME_WAIT`, retransmissão por timeout, fast retransmit após três ACKs duplicados e resposta RST para tráfego dirigido a uma porta fechada.
+- **Entrega de dados TCP:** segmentos são retransmitidos quando necessário e entregues em ordem nos cenários implementados.
+- **UDP sem conexão:** datagramas podem ser perdidos, duplicados ou entregues fora de ordem; o protocolo não tenta retransmiti-los.
+- **Checksum UDP:** cálculo de checksum de 16 bits usando complemento de 1 e pseudo-cabeçalho IPv4. Pacotes inválidos são descartados sem aviso ao remetente, como ilustração do comportamento sem confiabilidade do UDP.
+- **Relógio virtual:** eventos e timeouts avançam em uma fila lógica, sem esperar o tempo real de rede. Isso permite repetir cenários e testar resultados rapidamente.
 
-## Interface
+### Termos usados na interface
 
-Selecione TCP ou UDP; ajuste as probabilidades de perda, corrupção, duplicação e reordenação, o intervalo de atraso, a seed e o tempo de TIME_WAIT. No TCP, inicie a conexão A↔B, envie os segmentos da caixa de texto ou percorra os fechamentos. `Descartar próximo segmento` injeta uma perda determinística. `Passo`, `Iniciar`, `Pausar`, velocidade e `Reset` controlam o relógio virtual. O botão de comparação executa uma carga comum em duas simulações isoladas.
+- **RTO (Retransmission Timeout):** intervalo estimado antes de retransmitir um segmento sem confirmação. A simulação atualiza a estimativa de timeout a partir de amostras de RTT.
+- **RTT (Round-Trip Time):** tempo entre o envio de um segmento e o recebimento de sua confirmação.
+- **2×MSL / TIME_WAIT:** intervalo simulado de espera antes de encerrar completamente uma conexão TCP.
+- **Seed:** valor inicial do gerador pseudoaleatório do canal. Mantendo seed e configuração, é possível reproduzir sequências de falhas.
 
-Os segmentos são representados no diagrama de sequência; o grafo destaca os estados atuais de A e B; o log de transições é filtrável por host e conteúdo.
+## Estrutura
+
+```text
+src/
+	engine/       Motor FSM, canal, relógio virtual, simulador e cenários de teste
+	App.jsx       Interface React, controles da simulação, diagramas e métricas
+test-runner.js  Execução dos cenários automatizados
+```
+
+O núcleo em `src/engine` usa JavaScript e não depende do React. A interface chama o simulador para configurar e executar ações, e apresenta o estado resultante. Assim, a lógica central pode ser testada pelo Node sem abrir o navegador; a interface, por sua vez, é servida pelo Vite.
+
+## Comandos
+
+```bash
+npm run dev      # inicia o servidor de desenvolvimento
+npm test         # executa os cenários automatizados do simulador
+npm run lint     # verifica problemas de código com oxlint
+npm run build    # gera a versão de produção em dist/
+npm run preview  # serve localmente a versão gerada pelo build
+```
+
+Para testar a versão de produção, execute `npm run build` e depois `npm run preview`.
+
+## Referência
+
+Kurose, James F.; Ross, Keith W. *Redes de Computadores e a Internet: uma abordagem top-down*. Consulte o capítulo sobre a camada de transporte; a numeração e a edição variam entre edições do livro.
