@@ -1,4 +1,4 @@
-// Professor, criei esta classe de Relógio Virtual para substituir o setTimeout normal do JavaScript.
+// Professora, criei esta classe de Relógio Virtual para substituir o setTimeout normal do JavaScript.
 // O motivo é que com o setTimeout real os testes automatizados demorariam muito tempo para rodar 
 // (teríamos que esperar os milissegundos reais). Com esse relógio, conseguimos avançar o tempo instantaneamente nos testes.
 export class VirtualClock {
